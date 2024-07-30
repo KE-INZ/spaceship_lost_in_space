@@ -10,6 +10,7 @@ import tkinter as tk
 import threading
 import os.path
 import logging
+import math
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -45,7 +46,7 @@ class Anomaly:
         glColor3f(1.0, 1.0, 1.0)
         glPushMatrix()
         glRotatef(90, 1, 0, 0)
-        gluSphere(quad, 800, 100, 100)
+        gluSphere(quad, 800, 500, 500)
         glPopMatrix()
         glDisable(GL_TEXTURE_2D)
 
@@ -346,6 +347,8 @@ def pygame_thread(root, distance_var, speed_var, life_points_var, structure_var,
 
     lasers = []
     laser_speed = 1.0
+    laser_length = 0.2  # Set your desired length for the laser
+    laser_radius = 0.001  # Set your desired radius for the laser
 
     mouse_sensitivity = 0.4
     yaw, pitch = 0, 0
@@ -368,9 +371,119 @@ def pygame_thread(root, distance_var, speed_var, life_points_var, structure_var,
                 if structure_points <= 0:
                     structure_points = 0
 
+
+
     def add_collided_planet(planet_name):
         if planet_name not in collided_planets:
             collided_planets.append(planet_name)
+
+    def draw_laser(start_pos, direction, length, radius):
+        # Normalize direction vector
+        length_dir = math.sqrt(direction[0] ** 2 + direction[1] ** 2 + direction[2] ** 2)
+        direction = (
+            direction[0] / length_dir,
+            direction[1] / length_dir,
+            direction[2] / length_dir
+        )
+
+        # Compute the angles to align the cylinder with the direction
+        angle_x = math.atan2(direction[1], direction[2])
+        angle_y = math.atan2(direction[0], direction[2])
+
+        glPushMatrix()
+        glColor3f(1.0, 0.0, 0.0)  # Red color for laser
+        glTranslatef(start_pos[0], start_pos[1], start_pos[2])
+
+        # Rotate around Y-axis to align with direction in the XZ plane
+        glRotatef(math.degrees(angle_y), 0, 1, 0)
+        # Rotate around X-axis to align with direction in the XY plane
+        glRotatef(math.degrees(angle_x), 1, 0, 0)
+
+        # Draw the laser beam as a cylinder
+        glPushMatrix()
+        glTranslatef(0, 0, -length / 2.0)
+        gluCylinder(gluNewQuadric(), radius, radius, length, 16, 16)
+        glPopMatrix()
+
+        glPopMatrix()
+
+    def debug_draw_laser(laser):
+        start_pos, direction = laser
+        print(f"Laser Start: {start_pos}, Direction: {direction}")
+
+        # Optional: Draw a reference line to visualize laser direction
+        glColor3f(0.0, 1.0, 0.0)  # Green color for debug line
+        glBegin(GL_LINES)
+        glVertex3f(start_pos[0], start_pos[1], start_pos[2])
+        end_pos = (
+            start_pos[0] + direction[0] * 100,  # Extend the line 100 units in direction
+            start_pos[1] + direction[1] * 100,
+            start_pos[2] + direction[2] * 100
+        )
+        glVertex3f(end_pos[0], end_pos[1], end_pos[2])
+        glEnd()
+
+    def get_laser_start_position(spaceship_position, laser_offset):
+        return (
+            spaceship_position[0] + laser_offset[0],
+            spaceship_position[1] + laser_offset[1],
+            spaceship_position[2] + laser_offset[2]
+        )
+
+    def calculate_laser_direction(spaceship_direction, offset_angle):
+        # Adjust the direction based on the spaceship's current direction and offset angle
+        return (
+            spaceship_direction[0] * math.cos(offset_angle) - spaceship_direction[1] * math.sin(offset_angle),
+            spaceship_direction[0] * math.sin(offset_angle) + spaceship_direction[1] * math.cos(offset_angle),
+            spaceship_direction[2]  # Assuming the laser direction is in the same plane
+        )
+
+    def render_scene():
+        # Zeichne den Hintergrund, Planeten und das Raumschiff
+        # draw_background()
+        # draw_planets()
+        # draw_spaceship()
+        pass
+
+        # Zeichne die Laserstrahlen
+        glDisable(GL_LIGHTING)  # Lichter deaktivieren, um Laserstrahlen klarer zu sehen
+        for laser in lasers:
+            start_pos, direction = laser
+            draw_laser(start_pos, direction, laser_length, laser_radius)
+        glEnable(GL_LIGHTING)  # Lichter wieder aktivieren
+
+    def check_laser_collisions():
+        for laser in lasers:
+            start_pos, direction = laser
+            for planet in planets:
+                # Berechne den Abstand zwischen dem Laserstrahl und dem Planeten
+                # (Implementiere hier die Kollisionserkennung)
+                # Wenn Kollision erkannt:
+                print(f"Laser hit {planet.name}")
+                lasers.remove(laser)  # Entferne den Laserstrahl, wenn er einen Treffer erzielt hat
+                break
+
+    def handle_laser_movement(dt):
+        global lasers
+        new_lasers = []
+        for laser in lasers:
+            start_pos, direction = laser
+            start_pos += direction * laser_speed * dt
+            new_lasers.append([start_pos, direction])
+        lasers = new_lasers
+
+    laser_lifetime = 5.0  # Zeit in Sekunden, die ein Laserstrahl aktiv bleibt
+
+    def update_lasers(dt):
+        global lasers
+        new_lasers = []
+        for laser in lasers:
+            start_pos, direction = laser
+            start_pos += direction * laser_speed * dt
+            # Überprüfe, ob der Laserstrahl noch aktiv ist
+            if np.linalg.norm(start_pos) < laser_lifetime:
+                new_lasers.append([start_pos, direction])
+        lasers = new_lasers
 
     running = True
     while running:
@@ -384,14 +497,19 @@ def pygame_thread(root, distance_var, speed_var, life_points_var, structure_var,
                 if event.key == K_ESCAPE:
                     running = False
 
-                if event.key == K_SPACE:
-                    laser_position = movement.copy()
-                    laser_direction = np.array([
-                        -np.sin(np.radians(yaw)) * np.cos(np.radians(pitch)),
-                        np.sin(np.radians(pitch)),
-                        -np.cos(np.radians(yaw)) * np.cos(np.radians(pitch))
-                    ])
-                    lasers.append([laser_position, laser_direction])
+                if event.type == KEYDOWN:
+                    if event.key == K_SPACE:
+                        # Position des Raumschiffs als Startposition des Lasers verwenden
+                        laser_position = movement.copy()
+                        # Berechnung der Blickrichtung und Umkehren
+                        laser_direction = np.array([
+                            np.sin(np.radians(yaw)) * np.cos(np.radians(pitch)),  # x-Komponente
+                            -np.sin(np.radians(pitch)),  # y-Komponente
+                            np.cos(np.radians(yaw)) * np.cos(np.radians(pitch))  # z-Komponente
+                        ])
+                        # Normalisiere den Richtungsvektor
+                        laser_direction = laser_direction / np.linalg.norm(laser_direction)
+                        lasers.append([laser_position, laser_direction])
 
             if event.type == MOUSEMOTION:
                 handle_mouse_events(event, movement, yaw, pitch)
@@ -488,13 +606,7 @@ def pygame_thread(root, distance_var, speed_var, life_points_var, structure_var,
         for planet in planets:
             planet.draw()
 
-        for laser in lasers:
-            laser[0] += laser[1] * laser_speed * dt
-            glPushMatrix()
-            glTranslatef(*laser[0])
-            glColor3f(1, 0, 0)
-            gluSphere(gluNewQuadric(), 0.05, 16, 16)
-            glPopMatrix()
+        render_scene()
 
         for planet in planets:
             distance_to_planet = np.linalg.norm(planet.position - movement)
