@@ -1,3 +1,5 @@
+# Part 1: Imports and Classes
+
 import pygame
 from pygame.locals import *
 from OpenGL.GL import *
@@ -7,42 +9,46 @@ import numpy as np
 import tkinter as tk
 import threading
 import os.path
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class Anomaly:
+    def __init__(self):
+        self.background_texture = None
+
     def add_background(self):
-        # Load background texture
         try:
-            background_texture = pygame.image.load("textures/background/milky_way.png")
+            self.background_texture = pygame.image.load("textures/background/milky_way.png")
         except pygame.error as e:
-            print(f"Error loading background texture: {e}")
+            logging.error(f"Error loading background texture: {e}")
             return
 
-        # Debug: Print texture size
-        print(f"Background texture loaded: {background_texture.get_size()}")
+        logging.info(f"Background texture loaded: {self.background_texture.get_size()}")
 
-        # Create background sphere
         quad = gluNewQuadric()
         gluQuadricNormals(quad, GLU_SMOOTH)
         gluQuadricTexture(quad, GL_TRUE)
 
         glEnable(GL_TEXTURE_2D)
-        glBindTexture(GL_TEXTURE_2D, glGenTextures(1))
+        texture_id = glGenTextures(1)
+        glBindTexture(GL_TEXTURE_2D, texture_id)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
 
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, background_texture.get_width(), background_texture.get_height(), 0, GL_RGB, GL_UNSIGNED_BYTE, pygame.image.tostring(background_texture, "RGB", 1))
+        texture_data = pygame.image.tostring(self.background_texture, "RGB", 1)
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, self.background_texture.get_width(), self.background_texture.get_height(), 0, GL_RGB, GL_UNSIGNED_BYTE, texture_data)
 
         glColor3f(1.0, 1.0, 1.0)
         glPushMatrix()
-        glRotatef(90, 1, 0, 0)  # Drehen, um die Textur auf der Außenseite der Kugel anzuzeigen
-        gluSphere(quad, 1000, 100, 100)  # Große Kugel um das gesamte Szenario
-
-
+        glRotatef(90, 1, 0, 0)
+        gluSphere(quad, 800, 100, 100)
         glPopMatrix()
-        glEnable(GL_TEXTURE_2D)
-        # Draw Nebula
+        glDisable(GL_TEXTURE_2D)
+
         self.draw_nebula()
 
     def draw_nebula(self):
@@ -54,7 +60,7 @@ class Anomaly:
         glPointSize(particle_size)
 
         glBegin(GL_POINTS)
-        glColor4f(1.0, 1.0, 1.0, 0.5)  # Weiße Partikel mit Transparenz für _ im Bereich(num_particles):
+        glColor4f(1.0, 1.0, 1.0, 0.5)
         for _ in range(num_particles):
             x = np.random.uniform(-100, 100)
             y = np.random.uniform(-100, 100)
@@ -64,7 +70,8 @@ class Anomaly:
 
         glDisable(GL_BLEND)
 
-    def draw_stars(self, stars):
+    @staticmethod
+    def draw_stars(stars):
         glDisable(GL_LIGHTING)
         glBegin(GL_POINTS)
         glColor3f(1.0, 1.0, 1.0)
@@ -75,53 +82,41 @@ class Anomaly:
 
 class Spaceship:
     def __init__(self):
-        self.position = np.array([0, 0, 0], dtype=float)
-        self.velocity = np.array([0, 0, 0], dtype=float)
-        self.acceleration = np.array([0, 0, 0], dtype=float)
-        self.rotation = np.array([0, 0, 0], dtype=float)
-        self.angular_velocity = np.array([0, 0, 0], dtype=float)
+        self.position = np.zeros(3)
+        self.velocity = np.zeros(3)
+        self.acceleration = np.zeros(3)
+        self.rotation = np.zeros(3)
+        self.angular_velocity = np.zeros(3)
         self.max_speed = 0.5
         self.acceleration_rate = 0.05
         self.rotation_rate = 0.4
 
     def update(self, dt):
         self.velocity += self.acceleration * dt
-        self.velocity *= 0.99  # Fügt Reibung hinzu, um die Geschwindigkeit zu begrenzen
+        self.velocity *= 0.99  # Add friction to limit speed
         self.position += self.velocity * dt
-        self.angular_velocity *= 0.95  # Fügt Reibung für die Drehung hinzu
-
+        self.angular_velocity *= 0.95  # Add friction for rotation
 
         self.rotation += self.angular_velocity * dt
-
-        # Drehzahl begrenzen
         self.rotation = np.clip(self.rotation, -np.pi / 4, np.pi / 4)
 
     def apply_thrust(self, thrust_vector):
-        # Erzeugen Sie Schub basierend auf dem angegebenen Vektor
         self.acceleration = thrust_vector * self.acceleration_rate
 
     def rotate(self, dx, dy, clockwise=False, counterclockwise=False):
-        # Ändert die Rotationsgeschwindigkeit basierend auf der Mausbewegung
         self.angular_velocity[0] += dy * self.rotation_rate
         self.angular_velocity[1] += dx * self.rotation_rate
 
-        # Drehung im Uhrzeigersinn
         if clockwise:
             self.angular_velocity[2] += self.rotation_rate
-
-        # Rotation gegen den Uhrzeigersinn
         if counterclockwise:
             self.angular_velocity[2] -= self.rotation_rate
 
-        # Aktualisiert die Blickrichtung des Raumschiffs basierend auf der Mausbewegung
         self.rotation[0] += dy * self.rotation_rate
         self.rotation[1] += dx * self.rotation_rate
-
-        # Begrenzen Sie die Neigung, um ein Umkippen zu vermeiden
         self.rotation[0] = np.clip(self.rotation[0], -np.pi / 4, np.pi / 4)
 
     def move_forward(self):
-        # Bewegen das Raumschiff basierend auf seiner Ausrichtung vorwärts
         thrust_vector = np.array([
             -np.sin(self.rotation[1]) * np.cos(self.rotation[0]),
             np.sin(self.rotation[0]),
@@ -130,7 +125,6 @@ class Spaceship:
         self.apply_thrust(thrust_vector)
 
     def move_backward(self):
-        # Bewegt das Raumschiff entsprechend seiner Ausrichtung rückwärts
         thrust_vector = np.array([
             np.sin(self.rotation[1]) * np.cos(self.rotation[0]),
             -np.sin(self.rotation[0]),
@@ -142,7 +136,6 @@ class Spaceship:
         return self.position
 
     def get_camera_target(self):
-        # Berechnet den Blickwinkel der Kamera basierend auf der Ausrichtung des Raumschiffs
         x = self.position[0] - np.sin(self.rotation[1]) * np.cos(self.rotation[0])
         y = self.position[1] + np.sin(self.rotation[0])
         z = self.position[2] - np.cos(self.rotation[1]) * np.cos(self.rotation[0])
@@ -158,7 +151,7 @@ class Planet:
         self.angle = start_angle
         self.rotation_speed = rotation_speed
         self.rotation_angle = 0
-        self.position = np.array([distance * np.cos(start_angle), 0, distance * np.sin(start_angle)], dtype=float)
+        self.position = np.array([distance * np.cos(start_angle), 0, distance * np.sin(start_angle)])
         self.texture_id = self.load_texture()
 
     def update_position(self, dt):
@@ -171,21 +164,17 @@ class Planet:
         try:
             texture_surface = pygame.image.load(self.texture_path)
         except pygame.error as e:
-            print(f"Error loading texture: {e}")
+            logging.error(f"Error loading texture: {e}")
             return None
 
         texture_surface = self.scale_texture(texture_surface, 2048)
         texture_data = pygame.image.tostring(texture_surface, 'RGBA', 1)
         width, height = texture_surface.get_rect().size
 
-        print(f"Loading texture: {self.texture_path}")
-        print(f"Texture size: {width}x{height}")
+        logging.info(f"Loading texture: {self.texture_path}")
+        logging.info(f"Texture size: {width}x{height}")
 
         texture = glGenTextures(1)
-        if not texture:
-            print("Error creating texture")
-            return None
-
         glBindTexture(GL_TEXTURE_2D, texture)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
@@ -193,7 +182,7 @@ class Planet:
         try:
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, texture_data)
         except OpenGL.error.GLError as e:
-            print(f"OpenGL error loading texture: {e}")
+            logging.error(f"OpenGL error loading texture: {e}")
             return None
 
         glBindTexture(GL_TEXTURE_2D, 0)
@@ -212,29 +201,30 @@ class Planet:
     def draw(self):
         glPushMatrix()
         glTranslatef(*self.position)
-        glRotatef(np.degrees(self.angle), 0, 1, 0)  # Rotation um die Sonne
-        glRotatef(180, 0, 0, 1)  # Um 180 Grad um die Z-Achse drehen (um die Textur umzudrehen)
-        glRotatef(np.degrees(self.rotation_angle), 0, 1, 0)  # Drehung um die eigene Achse
+        glRotatef(np.degrees(self.angle), 0, 1, 0)
+        glRotatef(180, 0, 0, 1)
+        glRotatef(np.degrees(self.rotation_angle), 0, 1, 0)
 
         glEnable(GL_TEXTURE_2D)
-
         glBindTexture(GL_TEXTURE_2D, self.texture_id)
         quad = gluNewQuadric()
         gluQuadricNormals(quad, GLU_SMOOTH)
         gluQuadricTexture(quad, GL_TRUE)
-        glRotatef(90, 1, 0, 0)  # Um Planeten korrekt auszurichten, da sich die Textur normalerweise auf der XZ-Ebene befindet
+        glRotatef(90, 1, 0, 0)
 
-        # Schattenberechnung
         glPushMatrix()
-        gluSphere(quad, self.diameter / 2, 32, 32)  # Zeichnen Sie eine Kugel für den Schatten
+        gluSphere(quad, self.diameter / 2, 32, 32)
         glPopMatrix()
 
-        # Beleuchtung für den Planeten
-        glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, (1.0, 1.0, 1.0, 1.0))  # Bright color for the planet
-        gluSphere(quad, self.diameter / 2, 32, 32)  # Zeichne den Planeten
-        glEnable(GL_TEXTURE_2D)
+        glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, (1.0, 1.0, 1.0, 1.0))
+        gluSphere(quad, self.diameter / 2, 32, 32)
+        glDisable(GL_TEXTURE_2D)
 
         glPopMatrix()
+
+
+
+# Part 2: Helper Functions
 
 def init_opengl(display, sun_position):
     pygame.init()
@@ -254,28 +244,21 @@ def init_opengl(display, sun_position):
 
     glTranslatef(0.0, 0.0, -20)
 
-    # Ambientelicht für die gesamte Szene
     glLightModelfv(GL_LIGHT_MODEL_AMBIENT, (0.2, 0.2, 0.2, 1.0))
-
-    # Sonne als Punktlichtquelle
     glLightfv(GL_LIGHT0, GL_POSITION, (*sun_position, 1.0))
-    glLightfv(GL_LIGHT0, GL_DIFFUSE, (1.0, 1.0, 0.8, 1.0))  # Leicht gelbes Sonnenlicht
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, (1.0, 1.0, 0.8, 1.0))
     glLightfv(GL_LIGHT0, GL_SPECULAR, (1.0, 1.0, 1.0, 1.0))
 
-    # Aktivieren Sie die Dämpfung für eine realistischere Beleuchtung
     glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 1.0)
     glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.0)
     glLightf(GL_LIGHT0, GL_QUADRATIC_ATTENUATION, 0.0001)
 
-    # Materialeigenschaften für Planeten
     glMaterialfv(GL_FRONT, GL_SPECULAR, (0.5, 0.5, 0.5, 1.0))
     glMaterialf(GL_FRONT, GL_SHININESS, 50.0)
 
-    # Aktivieren Sie die Überblendung für weiche Schatten
     glEnable(GL_BLEND)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
-    # Aktivieren Sie den Schablonenpuffer für das Schattenvolumen
     glEnable(GL_STENCIL_TEST)
 
 def create_planets():
@@ -295,10 +278,10 @@ def create_planets():
 
     for name, diameter, distance, texture_path, orbital_speed, rotation_speed in planets_data:
         start_angle = np.random.uniform(0, 2 * np.pi)
-        if os.path.exists(texture_path):  # Check if texture file exists
+        if os.path.exists(texture_path):
             planets.append(Planet(name, diameter, distance, texture_path, orbital_speed, start_angle, rotation_speed))
         else:
-            print(f"Texture file {texture_path} not found.")
+            logging.warning(f"Texture file {texture_path} not found.")
 
     return planets
 
@@ -306,16 +289,8 @@ def update_planets(planets, dt):
     for planet in planets:
         planet.update_position(dt)
 
-def create_stars():
-    num_stars = 100
-    stars = np.random.rand(num_stars, 3) * 200 - 100
-    return stars
-
-def render_stars(stars):
-    glEnableClientState(GL_VERTEX_ARRAY)
-    glVertexPointer(3, GL_FLOAT, 0, stars)
-    glDrawArrays(GL_POINTS, 0, len(stars))
-    glDisableClientState(GL_VERTEX_ARRAY)
+def create_stars(num_stars=1000):
+    return np.random.rand(num_stars, 3) * 200 - 100
 
 def handle_mouse_events(event, movement, yaw, pitch):
     mouse_sensitivity = 0.4
