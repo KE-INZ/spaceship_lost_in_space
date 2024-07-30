@@ -8,20 +8,19 @@ import tkinter as tk
 import threading
 import os.path
 
-
 class Anomaly:
     def add_background(self):
-        # Laden der Hintergrundtextur
+        # Load background texture
         try:
             background_texture = pygame.image.load("textures/background/milky_way.png")
         except pygame.error as e:
-            print(f"Fehler beim Laden der Hintergrundtextur: {e}")
+            print(f"Error loading background texture: {e}")
             return
 
-        # Debug: Ausgabe der Texturgröße
-        print(f"Hintergrundtextur geladen: {background_texture.get_size()}")
+        # Debug: Print texture size
+        print(f"Background texture loaded: {background_texture.get_size()}")
 
-        # Erstellen der Hintergrundkugel
+        # Create background sphere
         quad = gluNewQuadric()
         gluQuadricNormals(quad, GLU_SMOOTH)
         gluQuadricTexture(quad, GL_TRUE)
@@ -37,13 +36,14 @@ class Anomaly:
 
         glColor3f(1.0, 1.0, 1.0)
         glPushMatrix()
-        glRotatef(90, 1, 0, 0)  # Um die Textur auf der Außenseite der Kugel anzuzeigen
+        glRotatef(90, 1, 0, 0)  # Drehen, um die Textur auf der Außenseite der Kugel anzuzeigen
         gluSphere(quad, 1000, 100, 100)  # Große Kugel um das gesamte Szenario
+
+
         glPopMatrix()
         glEnable(GL_TEXTURE_2D)
         # Draw Nebula
         self.draw_nebula()
-
 
     def draw_nebula(self):
         num_particles = 100
@@ -54,8 +54,7 @@ class Anomaly:
         glPointSize(particle_size)
 
         glBegin(GL_POINTS)
-        #glColor4f(1.0, 1.0, 1.0, 0.5)  # Weiße Partikel mit Transparenz
-        glColor4f(1.0, 1.0, 1.0, 0.5)  # Gelbe Partikel mit Transparenz
+        glColor4f(1.0, 1.0, 1.0, 0.5)  # Weiße Partikel mit Transparenz für _ im Bereich(num_particles):
         for _ in range(num_particles):
             x = np.random.uniform(-100, 100)
             y = np.random.uniform(-100, 100)
@@ -74,7 +73,6 @@ class Anomaly:
         glEnd()
         glEnable(GL_LIGHTING)
 
-
 class Spaceship:
     def __init__(self):
         self.position = np.array([0, 0, 0], dtype=float)
@@ -88,20 +86,22 @@ class Spaceship:
 
     def update(self, dt):
         self.velocity += self.acceleration * dt
-        self.velocity *= 0.99  # Füge eine Art von Reibung hinzu, um die Geschwindigkeit zu begrenzen
+        self.velocity *= 0.99  # Fügt Reibung hinzu, um die Geschwindigkeit zu begrenzen
         self.position += self.velocity * dt
-        self.angular_velocity *= 0.95  # Füge eine Art von Reibung für die Rotation hinzu
+        self.angular_velocity *= 0.95  # Fügt Reibung für die Drehung hinzu
+
+
         self.rotation += self.angular_velocity * dt
 
-        # Begrenze die Rotationsgeschwindigkeit
+        # Drehzahl begrenzen
         self.rotation = np.clip(self.rotation, -np.pi / 4, np.pi / 4)
 
     def apply_thrust(self, thrust_vector):
-        # Erzeuge einen Schub basierend auf dem übergebenen Vektor
+        # Erzeugen Sie Schub basierend auf dem angegebenen Vektor
         self.acceleration = thrust_vector * self.acceleration_rate
 
     def rotate(self, dx, dy, clockwise=False, counterclockwise=False):
-        # Ändere die Rotationsgeschwindigkeit basierend auf der Mausbewegung
+        # Ändert die Rotationsgeschwindigkeit basierend auf der Mausbewegung
         self.angular_velocity[0] += dy * self.rotation_rate
         self.angular_velocity[1] += dx * self.rotation_rate
 
@@ -109,19 +109,19 @@ class Spaceship:
         if clockwise:
             self.angular_velocity[2] += self.rotation_rate
 
-        # Drehung gegen den Uhrzeigersinn
+        # Rotation gegen den Uhrzeigersinn
         if counterclockwise:
             self.angular_velocity[2] -= self.rotation_rate
 
-        # Aktualisiere die Blickrichtung des Raumschiffs basierend auf der Mausbewegung
+        # Aktualisiert die Blickrichtung des Raumschiffs basierend auf der Mausbewegung
         self.rotation[0] += dy * self.rotation_rate
         self.rotation[1] += dx * self.rotation_rate
 
-        # Begrenze die Neigung, um Überschläge zu vermeiden
+        # Begrenzen Sie die Neigung, um ein Umkippen zu vermeiden
         self.rotation[0] = np.clip(self.rotation[0], -np.pi / 4, np.pi / 4)
 
     def move_forward(self):
-        # Bewege das Raumschiff vorwärts basierend auf seiner Ausrichtung
+        # Bewegen das Raumschiff basierend auf seiner Ausrichtung vorwärts
         thrust_vector = np.array([
             -np.sin(self.rotation[1]) * np.cos(self.rotation[0]),
             np.sin(self.rotation[0]),
@@ -130,7 +130,7 @@ class Spaceship:
         self.apply_thrust(thrust_vector)
 
     def move_backward(self):
-        # Bewege das Raumschiff rückwärts basierend auf seiner Ausrichtung
+        # Bewegt das Raumschiff entsprechend seiner Ausrichtung rückwärts
         thrust_vector = np.array([
             np.sin(self.rotation[1]) * np.cos(self.rotation[0]),
             -np.sin(self.rotation[0]),
@@ -142,13 +142,11 @@ class Spaceship:
         return self.position
 
     def get_camera_target(self):
-        # Berechne den Blickpunkt der Kamera basierend auf der Ausrichtung des Raumschiffs
+        # Berechnet den Blickwinkel der Kamera basierend auf der Ausrichtung des Raumschiffs
         x = self.position[0] - np.sin(self.rotation[1]) * np.cos(self.rotation[0])
         y = self.position[1] + np.sin(self.rotation[0])
         z = self.position[2] - np.cos(self.rotation[1]) * np.cos(self.rotation[0])
         return np.array([x, y, z])
-
-
 
 class Planet:
     def __init__(self, name, diameter, distance, texture_path, orbital_speed, start_angle, rotation_speed):
@@ -173,19 +171,19 @@ class Planet:
         try:
             texture_surface = pygame.image.load(self.texture_path)
         except pygame.error as e:
-            print(f"Fehler beim Laden der Textur: {e}")
+            print(f"Error loading texture: {e}")
             return None
 
         texture_surface = self.scale_texture(texture_surface, 2048)
         texture_data = pygame.image.tostring(texture_surface, 'RGBA', 1)
         width, height = texture_surface.get_rect().size
 
-        print(f"Lade Textur: {self.texture_path}")
-        print(f"Texturgröße: {width}x{height}")
+        print(f"Loading texture: {self.texture_path}")
+        print(f"Texture size: {width}x{height}")
 
         texture = glGenTextures(1)
         if not texture:
-            print("Fehler beim Erstellen der Textur")
+            print("Error creating texture")
             return None
 
         glBindTexture(GL_TEXTURE_2D, texture)
@@ -195,7 +193,7 @@ class Planet:
         try:
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, texture_data)
         except OpenGL.error.GLError as e:
-            print(f"OpenGL-Fehler beim Laden der Textur: {e}")
+            print(f"OpenGL error loading texture: {e}")
             return None
 
         glBindTexture(GL_TEXTURE_2D, 0)
@@ -215,30 +213,28 @@ class Planet:
         glPushMatrix()
         glTranslatef(*self.position)
         glRotatef(np.degrees(self.angle), 0, 1, 0)  # Rotation um die Sonne
-        glRotatef(180, 0, 0, 1)  # Drehung um 180 Grad um die Z-Achse (um die Textur umzudrehen)
-        glRotatef(np.degrees(self.rotation_angle), 0, 1, 0)  # Rotation um die eigene Achse
+        glRotatef(180, 0, 0, 1)  # Um 180 Grad um die Z-Achse drehen (um die Textur umzudrehen)
+        glRotatef(np.degrees(self.rotation_angle), 0, 1, 0)  # Drehung um die eigene Achse
 
-        glEnable(GL_TEXTURE_2D)  # Erste Aktivierung von GL_TEXTURE_2D
+        glEnable(GL_TEXTURE_2D)
 
         glBindTexture(GL_TEXTURE_2D, self.texture_id)
         quad = gluNewQuadric()
         gluQuadricNormals(quad, GLU_SMOOTH)
         gluQuadricTexture(quad, GL_TRUE)
-        glRotatef(90, 1, 0,
-                  0)  # Um die Planeten richtig auszurichten, da die Textur normalerweise auf der XZ-Ebene liegt
+        glRotatef(90, 1, 0, 0)  # Um Planeten korrekt auszurichten, da sich die Textur normalerweise auf der XZ-Ebene befindet
 
         # Schattenberechnung
         glPushMatrix()
-        gluSphere(quad, self.diameter / 2, 32, 32)  # Zeichne eine Kugel für den Schatten
+        gluSphere(quad, self.diameter / 2, 32, 32)  # Zeichnen Sie eine Kugel für den Schatten
         glPopMatrix()
 
         # Beleuchtung für den Planeten
-        glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, (1.0, 1.0, 1.0, 1.0))  # Helle Farbe für den Planeten
+        glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, (1.0, 1.0, 1.0, 1.0))  # Bright color for the planet
         gluSphere(quad, self.diameter / 2, 32, 32)  # Zeichne den Planeten
-        glEnable(GL_TEXTURE_2D)  # Erste Deaktivierung von GL_TEXTURE_2D
+        glEnable(GL_TEXTURE_2D)
 
         glPopMatrix()
-
 
 def init_opengl(display, sun_position):
     pygame.init()
@@ -246,29 +242,41 @@ def init_opengl(display, sun_position):
     pygame.display.set_caption('Spaceship Game')
 
     glEnable(GL_DEPTH_TEST)
-    glEnable(GL_TEXTURE_2D)  # Texturen aktivieren
+    glEnable(GL_TEXTURE_2D)
+    glEnable(GL_LIGHTING)
+    glEnable(GL_LIGHT0)
+    glEnable(GL_COLOR_MATERIAL)
+    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)
 
     glMatrixMode(GL_PROJECTION)
-    gluPerspective(45, display[0] / display[1], 0.1, 100.0)
+    gluPerspective(45, display[0] / display[1], 0.1, 1000.0)
     glMatrixMode(GL_MODELVIEW)
 
     glTranslatef(0.0, 0.0, -20)
 
-    glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, GL_TRUE)
+    # Ambientelicht für die gesamte Szene
     glLightModelfv(GL_LIGHT_MODEL_AMBIENT, (0.2, 0.2, 0.2, 1.0))
 
-    glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, (1.0, 1.0, 1.0, 1.0))
+    # Sonne als Punktlichtquelle
+    glLightfv(GL_LIGHT0, GL_POSITION, (*sun_position, 1.0))
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, (1.0, 1.0, 0.8, 1.0))  # Leicht gelbes Sonnenlicht
+    glLightfv(GL_LIGHT0, GL_SPECULAR, (1.0, 1.0, 1.0, 1.0))
+
+    # Aktivieren Sie die Dämpfung für eine realistischere Beleuchtung
+    glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 1.0)
+    glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.0)
+    glLightf(GL_LIGHT0, GL_QUADRATIC_ATTENUATION, 0.0001)
+
+    # Materialeigenschaften für Planeten
     glMaterialfv(GL_FRONT, GL_SPECULAR, (0.5, 0.5, 0.5, 1.0))
     glMaterialf(GL_FRONT, GL_SHININESS, 50.0)
 
-    # Sonnenlicht als gerichtetes Licht festlegen
-    glEnable(GL_LIGHTING)
-    glEnable(GL_LIGHT0)
-    glLightfv(GL_LIGHT0, GL_POSITION, (*sun_position, 1.0))
-    glLightfv(GL_LIGHT0, GL_DIFFUSE, (1.0, 1.0, 1.0, 1.0))
-    glLightfv(GL_LIGHT0, GL_SPECULAR, (1.0, 1.0, 1.0, 1.0))
-    glLightfv(GL_LIGHT0, GL_AMBIENT, (0.1, 0.1, 0.1, 1.0))
+    # Aktivieren Sie die Überblendung für weiche Schatten
+    glEnable(GL_BLEND)
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
+    # Aktivieren Sie den Schablonenpuffer für das Schattenvolumen
+    glEnable(GL_STENCIL_TEST)
 
 def create_planets():
     planets = []
@@ -285,17 +293,14 @@ def create_planets():
         ("Pluto", 0.2, 90, "textures/planeten/pluto/pluto.png", 0.02, 0.001)
     ]
 
-
     for name, diameter, distance, texture_path, orbital_speed, rotation_speed in planets_data:
         start_angle = np.random.uniform(0, 2 * np.pi)
-        if os.path.exists(texture_path):  # Überprüfen, ob die Texturdatei vorhanden ist
+        if os.path.exists(texture_path):  # Check if texture file exists
             planets.append(Planet(name, diameter, distance, texture_path, orbital_speed, start_angle, rotation_speed))
         else:
-            print(f"Texturdatei {texture_path} nicht gefunden.")
+            print(f"Texture file {texture_path} not found.")
 
     return planets
-
-
 
 def update_planets(planets, dt):
     for planet in planets:
@@ -469,7 +474,7 @@ def pygame_thread(root, distance_var, speed_var, life_points_var, structure_var,
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
-        camera_distance = 1.05  # näher heranzoomen  # Abstand zwischen Kamera und Raumschiff
+        camera_distance = 1.05  # näher heranzoomen und Abstand zwischen Kamera und Raumschiff
 
         glLoadIdentity()
         gluLookAt(
@@ -481,7 +486,7 @@ def pygame_thread(root, distance_var, speed_var, life_points_var, structure_var,
             movement[0] - np.sin(np.radians(yaw)) * np.cos(np.radians(pitch)),  # Zielpunkt (Mittelpunkt)
             movement[1] + np.sin(np.radians(pitch)),  # Zielpunkt (Mittelpunkt)
             movement[2] - np.cos(np.radians(yaw)) * np.cos(np.radians(pitch)),  # Zielpunkt (Mittelpunkt)
-            0, 1, 0  # Up-Vektor (normalerweise die Y-Achse)
+            0, 1, 0  # Up-Vektor (normalerweise die y-Achse)
         )
 
 
